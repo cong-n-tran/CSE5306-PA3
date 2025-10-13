@@ -1,5 +1,13 @@
 
-# Distributed Ride-Sharing System
+# Distributed Ride-Sharing System (CSE5306 - Project Assignment 2 - Fall 2025)
+
+**Faisal Ahmad - 1002239354**
+
+M.S. in Computer Science, University of Texas at Arlington
+
+Course: CSE 5306 — Distributed Systems
+
+---
 
 This project is a distributed ride-sharing system, similar to a simplified version of Uber or Lyft.  
 It was developed as part of the **CSE 5306 – Distributed Systems** course at the University of Texas at Arlington.
@@ -510,11 +518,3 @@ The **layered architecture** was simpler and faster for this use case, while the
 This project demonstrates how different architectures impact performance and complexity in distributed system design.
 
 ---
-
-## 13. Author
-
-**Faisal Ahmad - 1002239354**
-
-M.S. in Computer Science, University of Texas at Arlington
-
-Course: CSE 5306 — Distributed Systems
