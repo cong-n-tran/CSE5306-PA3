@@ -1,0 +1,70 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  auth:
+    build: .
+    container_name: auth
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    command: uvicorn services.auth_service.main:app --host 0.0.0.0 --port 8001
+    depends_on:
+      - redis
+    ports:
+      - "8001:8001"
+
+  location:
+    build: .
+    container_name: location
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    command: uvicorn services.location_service.main:app --host 0.0.0.0 --port 8002
+    depends_on:
+      - redis
+    ports:
+      - "8002:8002"
+
+  matching:
+    build: .
+    container_name: matching
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    command: uvicorn services.matching_service.main:app --host 0.0.0.0 --port 8003
+    depends_on:
+      - redis
+    ports:
+      - "8003:8003"
+
+  trip:
+    build: .
+    container_name: trip
+    environment:
+      - REDIS_URL=${REDIS_URL}
+    command: uvicorn services.trip_service.main:app --host 0.0.0.0 --port 8004
+    depends_on:
+      - redis
+    ports:
+      - "8004:8004"
+
+  gateway:
+    build: .
+    container_name: gateway
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - AUTH_URL=${AUTH_URL}
+      - LOCATION_URL=${LOCATION_URL}
+      - MATCHING_URL=${MATCHING_URL}
+      - TRIP_URL=${TRIP_URL}
+    command: uvicorn services.gateway.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - auth
+      - location
+      - matching
+      - trip
+    ports:
+      - "8000:8000"

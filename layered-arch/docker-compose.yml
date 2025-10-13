@@ -1,0 +1,52 @@
+version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  node1:
+    build: .
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - NODE_ID=node1
+      - HTTP_PORT=8101
+    depends_on: [redis]
+    ports: ["8101:8101"]
+
+  node2:
+    build: .
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - NODE_ID=node2
+      - HTTP_PORT=8102
+    depends_on: [redis]
+    ports: ["8102:8102"]
+
+  node3:
+    build: .
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - NODE_ID=node3
+      - HTTP_PORT=8103
+    depends_on: [redis]
+    ports: ["8103:8103"]
+
+  node4:
+    build: .
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - NODE_ID=node4
+      - HTTP_PORT=8104
+    depends_on: [redis]
+    ports: ["8104:8104"]
+
+  node5:
+    build: .
+    environment:
+      - REDIS_URL=${REDIS_URL}
+      - NODE_ID=node5
+      - HTTP_PORT=8105
+    depends_on: [redis]
+    ports: ["8105:8105"]
