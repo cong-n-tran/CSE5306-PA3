@@ -241,6 +241,198 @@ docker compose down
 
 ## 9. Evaluation and Results
 
+### Overview
+
+The performance and scalability of both architectures were tested using a Python benchmarking script named [`evaluation.py`](./evaluation.py).
+This script automatically measures throughput and latency under different workloads, concurrency levels, and driver pool sizes for both the **microservice** and **layered** implementations.
+It detects which system is currently running (port **8000** for the microservice gateway, **8101** for the layered version) and executes a series of automated experiments.
+All results, including CSV data and plots, are saved inside the `results/` directory.
+
+---
+
+### Evaluation Procedure
+
+#### Running the tests
+
+1. Start one architecture using Docker Compose (only one at a time):
+
+   ```bash
+   cd microservice-arch
+   docker compose up --build
+   ```
+
+   or
+
+   ```bash
+   cd layered-arch
+   docker compose up --build
+   ```
+2. From the project root directory, run:
+
+   ```bash
+   python evaluation.py
+   ```
+
+The script automatically detects the running architecture and performs all experiments sequentially.
+
+---
+
+### Types of Tests Conducted
+
+1. **Performance Test**
+
+   * Sends 200 ride requests sequentially (concurrency = 1).
+   * Seeds one rider and 50 drivers.
+   * Measures baseline throughput and latency.
+
+2. **Scalability Matrix**
+
+   * Requests: `[100, 200, 400, 800, 1600]`
+   * Concurrency levels: `[1, 5, 10, 20]`
+   * Measures throughput and p50/p95 latency for each combination.
+   * Produces CSV and PNG plots for detailed comparison.
+
+3. **Driver-Pool Sweep**
+
+   * Tests with driver counts `[10, 50, 100, 200, 500]`
+   * Fixed workload: 200 requests, concurrency = 10.
+   * Shows how the system scales with data size (larger driver pools).
+
+Results are saved under:
+
+```
+results/
+ ├── microservice/
+ ├── layered/
+ └── comparison_*.png
+```
+
+---
+
+### Metrics
+
+| Metric                 | Description                                                         | Purpose                            |
+| ---------------------- | ------------------------------------------------------------------- | ---------------------------------- |
+| **Throughput (req/s)** | Number of successful ride requests handled per second               | Measures overall system speed      |
+| **p50 latency (ms)**   | Median latency (50th percentile). Half the requests are faster.     | Represents typical user experience |
+| **p95 latency (ms)**   | 95th percentile latency. 95% of requests are faster; 5% are slower. | Indicates “worst-case” delays      |
+
+Low p50 and p95 values mean the system is fast and consistent. A large gap between them indicates unstable performance under load.
+
+---
+
+### Experimental Setup
+
+| Parameter            | Configuration                                          |
+| -------------------- | ------------------------------------------------------ |
+| Host Machine         | Windows laptop with Docker Desktop (Linux containers)  |
+| Programming Language | Python 3.11                                            |
+| Framework            | FastAPI                                                |
+| Database             | Redis                                                  |
+| Microservice Nodes   | 5 services + 1 Redis instance (6 containers)           |
+| Layered Nodes        | 5 replicas + 1 Redis instance (6 containers)           |
+| Communication Model  | HTTP (for both internal and external calls)            |
+| Testing Tool         | `evaluation.py` (multi-threaded Python load generator) |
+
+---
+
+### Performance Results (Baseline)
+
+| Architecture        | OK/Total | Throughput (req/s) | p50 (ms) | p95 (ms) |
+| ------------------- | -------- | ------------------ | -------- | -------- |
+| Microservice (HTTP) | 200/200  | 18.14              | 53.90    | 71.27    |
+| Layered (HTTP)      | 200/200  | 44.45              | 22.06    | 28.77    |
+
+The layered architecture handled approximately twice as many requests per second and responded two to three times faster than the microservice version.
+This difference is primarily due to reduced communication overhead, since all components in the layered design operate within a single process.
+
+---
+
+### Scalability Results
+
+#### Layered Architecture
+
+* Throughput increased steadily and remained stable up to 1600 requests.
+* p50 and p95 latency values stayed consistently low (below 40 ms) even under higher concurrency.
+* Charts generated:
+
+  * `results/layered/results_matrix_layered_throughput.png`
+  * `results/layered/results_matrix_layered_latency_p50.png`
+  * `results/layered/results_matrix_layered_latency_p95.png`
+
+#### Microservice Architecture
+
+* Throughput improved at first but fluctuated beyond 800 requests due to inter-service HTTP communication overhead.
+* p95 latency increased significantly at higher concurrency (10–20 threads), showing queuing delays.
+* Charts generated:
+
+  * `results/microservice/results_matrix_microservice_throughput.png`
+  * `results/microservice/results_matrix_microservice_latency_p50.png`
+  * `results/microservice/results_matrix_microservice_latency_p95.png`
+
+#### Cross-Architecture Comparison
+
+* `results/comparison_throughput_c1.png` shows the layered architecture maintaining higher throughput across all request counts.
+* `results/comparison_latency_p95_c1.png` shows the layered version sustaining lower latency, with fewer spikes even under load.
+
+---
+
+### Driver-Pool Scalability
+
+#### Layered Architecture
+
+* Increasing the number of drivers improved throughput and slightly reduced latency.
+* Redis handled larger driver pools efficiently, confirming that the data layer scales well.
+* Charts:
+
+  * `results/layered/results_driver_sweep_layered_throughput.png`
+  * `results/layered/results_driver_sweep_layered_latency_p50.png`
+  * `results/layered/results_driver_sweep_layered_latency_p95.png`
+
+#### Microservice Architecture
+
+* Throughput fluctuated with larger driver pools.
+* Latency increased under heavier data sizes because multiple services needed to coordinate across network calls.
+* Charts:
+
+  * `results/microservice/results_driver_sweep_microservice_throughput.png`
+  * `results/microservice/results_driver_sweep_microservice_latency_p50.png`
+  * `results/microservice/results_driver_sweep_microservice_latency_p95.png`
+
+---
+
+### Analysis of Design Trade-offs
+
+| Aspect                  | Microservice Architecture                  | Layered Architecture                         |
+| ----------------------- | ------------------------------------------ | -------------------------------------------- |
+| **Performance**         | Lower throughput due to multiple HTTP hops | Faster execution via direct in-process calls |
+| **Latency Stability**   | Higher p95 latency under load              | Stable and predictable latency               |
+| **Modularity**          | High (each service is independent)         | Low (all logic in one application)           |
+| **Scalability Type**    | Horizontal (scale individual services)     | Vertical (replicate full app)                |
+| **Fault Isolation**     | High (services can fail independently)     | Moderate (node-level isolation)              |
+| **Ease of Development** | More complex                               | Simpler to build and deploy                  |
+
+**Summary:**
+The microservice architecture represents a realistic distributed design suitable for large-scale systems that require modularity and fault tolerance.
+However, for smaller systems or single-node deployments, the layered approach is faster, easier to manage, and more resource-efficient.
+
+---
+
+### Conclusion
+
+Both architectures satisfy all functional and performance requirements.
+Experimental results show that:
+
+* The **layered architecture** achieved approximately 2.4× higher throughput and lower latency across all workloads.
+* The **microservice architecture** exhibited slower response times due to network and serialization overhead, but it provides superior modularity and scalability options.
+
+In practical terms:
+
+* For small or academic projects, the **layered architecture** is the best choice because it is faster and easier to maintain.
+* For enterprise-level systems with many teams or independent features, the **microservice architecture** provides long-term flexibility despite the performance cost.
+
+<!-- ## 9. Evaluation and Results
+
 A Python script (`quick_eval.py`) was used to send 200 ride requests to each architecture and measure:
 
 * **Throughput (requests per second)**
@@ -260,7 +452,7 @@ Each architecture was run under identical conditions.
 * Both achieved full functionality, but with different trade-offs:
 
   * **Microservice:** modular, easier to scale individual components.
-  * **Layered:** simpler, faster, easier to deploy.
+  * **Layered:** simpler, faster, easier to deploy. -->
 
 ---
 
