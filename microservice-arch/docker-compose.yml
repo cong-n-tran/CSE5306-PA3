@@ -28,6 +28,7 @@ services:
       - redis
     ports:
       - "8002:8002"
+      - "50052:50052"
 
   matching:
     build: .
@@ -50,6 +51,7 @@ services:
       - redis
     ports:
       - "8004:8004"
+      - "50051:50051"
 
   gateway:
     build: .

@@ -1,0 +1,29 @@
+syntax = "proto3";
+package twophase;
+
+service Participant {
+  rpc VoteRequest(VoteRequestArgs) returns (VoteReply);
+  rpc GlobalCommit(GlobalCommitArgs) returns (GlobalCommitReply);
+  rpc GlobalAbort(GlobalAbortArgs) returns (GlobalAbortReply);
+}
+
+message VoteRequestArgs {
+  string transaction_id = 1;
+  string ride_id = 2;
+  string driver_id = 3;
+}
+message VoteReply {
+  bool vote_commit = 1;
+}
+
+message GlobalCommitArgs {
+  string transaction_id = 1;
+  string ride_id = 2;
+  string driver_id = 3;
+}
+message GlobalCommitReply {}
+
+message GlobalAbortArgs {
+  string transaction_id = 1;
+}
+message GlobalAbortReply {}
