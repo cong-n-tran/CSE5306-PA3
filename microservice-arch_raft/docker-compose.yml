@@ -1,0 +1,157 @@
+services:
+
+  # ----------------------------------------------------
+  # Raft Cluster
+  # ----------------------------------------------------
+  raft1:
+    build:
+      context: ./raft
+      dockerfile: Dockerfile.raft
+    container_name: raft1
+    environment:
+      NODE_INDEX: 1
+      CLUSTER_SIZE: 5
+      BASE_NAME: raft
+      PORT: 50051
+    ports:
+      - "50051:50051"   # host:container
+
+  raft2:
+    build:
+      context: ./raft
+      dockerfile: Dockerfile.raft
+    container_name: raft2
+    environment:
+      NODE_INDEX: 2
+      CLUSTER_SIZE: 5
+      BASE_NAME: raft
+      PORT: 50051
+    ports:
+      - "50052:50051"
+
+  raft3:
+    build:
+      context: ./raft
+      dockerfile: Dockerfile.raft
+    container_name: raft3
+    environment:
+      NODE_INDEX: 3
+      CLUSTER_SIZE: 5
+      BASE_NAME: raft
+      PORT: 50051
+    ports:
+      - "50053:50051"
+
+  raft4:
+    build:
+      context: ./raft
+      dockerfile: Dockerfile.raft
+    container_name: raft4
+    environment:
+      NODE_INDEX: 4
+      CLUSTER_SIZE: 5
+      BASE_NAME: raft
+      PORT: 50051
+    ports:
+      - "50054:50051"
+
+  raft5:
+    build:
+      context: ./raft
+      dockerfile: Dockerfile.raft
+    container_name: raft5
+    environment:
+      NODE_INDEX: 5
+      CLUSTER_SIZE: 5
+      BASE_NAME: raft
+      PORT: 50051
+    ports:
+      - "50055:50051"
+
+  # ----------------------------------------------------
+  # Shared Dockerfile for all Python microservices
+  # ----------------------------------------------------
+  auth_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth_service
+    command: uvicorn services.auth_service.main:app --host 0.0.0.0 --port 6000
+    environment:
+      RAFT_CLUSTER: "raft1,raft2,raft3,raft4,raft5"
+      RAFT_PORT: 50051
+    depends_on:
+      - raft1
+      - raft2
+      - raft3
+      - raft4
+      - raft5
+    ports:
+      - "6001:6000"
+
+  location_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: location_service
+    command: uvicorn services.location_service.main:app --host 0.0.0.0 --port 6000
+    environment:
+      RAFT_CLUSTER: "raft1,raft2,raft3,raft4,raft5"
+      RAFT_PORT: 50051
+    depends_on:
+      - raft1
+      - raft2
+      - raft3
+      - raft4
+      - raft5
+    ports:
+      - "6002:6000"
+
+  matching_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: matching_service
+    command: uvicorn services.matching_service.main:app --host 0.0.0.0 --port 6000
+    environment:
+      RAFT_CLUSTER: "raft1,raft2,raft3,raft4,raft5"
+      RAFT_PORT: 50051
+    depends_on:
+      - raft1
+      - raft2
+      - raft3
+      - raft4
+      - raft5
+    ports:
+      - "6003:6000"
+
+  trip_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: trip_service
+    command: uvicorn services.trip_service.main:app --host 0.0.0.0 --port 6000
+    environment:
+      RAFT_CLUSTER: "raft1,raft2,raft3,raft4,raft5"
+      RAFT_PORT: 50051
+    depends_on:
+      - raft1
+      - raft2
+      - raft3
+      - raft4
+      - raft5
+    ports:
+      - "6004:6000"
+
+  gateway:
+    build:
+      context: .
+    container_name: gateway
+    command: uvicorn services.gateway.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - auth_service
+      - location_service
+      - matching_service
+      - trip_service
+    ports:
+      - "8000:8000"

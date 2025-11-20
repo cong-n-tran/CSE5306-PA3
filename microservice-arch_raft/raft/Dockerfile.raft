@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y build-essential gcc python3-dev && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir grpcio grpcio-tools
+
+COPY raft.proto /app/raft.proto
+COPY raft_server.py /app/raft_server.py
+COPY entrypoint-raft.sh /app/entrypoint-raft.sh
+RUN chmod +x entrypoint-raft.sh
+
+# generate gRPC pylibs
+RUN python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. raft.proto
+
+EXPOSE 50051
+
+ENTRYPOINT ["/app/entrypoint-raft.sh"]

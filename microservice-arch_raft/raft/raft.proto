@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package raft;
+
+service Raft {
+  rpc RequestVote(RequestVoteRequest) returns (RequestVoteReply) {}
+  rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesReply) {}
+}
+
+// -------------------
+// RequestVote Messages
+// -------------------
+message RequestVoteRequest {
+  int32 term = 1;
+  string candidate_id = 2;
+}
+
+message RequestVoteReply {
+  int32 term = 1;
+  bool vote_granted = 2;
+}
+
+// -------------------
+// AppendEntries Messages
+// -------------------
+message LogEntry {
+  string op = 1;    // operation or command
+  int32 term = 2;   // term when entry was created
+  int32 index = 3;  // log index
+}
+
+message AppendEntriesRequest {
+  int32 term = 1;                 // leader's term
+  string leader_id = 2;           // leader's id
+  repeated LogEntry entries = 3;  // log entries to replicate
+  int32 commit_index = 4;         // leader's last committed index
+}
+
+message AppendEntriesReply {
+  int32 term = 1;     // current term of follower
+  bool success = 2;   // true if follower accepted entries
+}

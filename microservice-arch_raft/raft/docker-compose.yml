@@ -1,0 +1,138 @@
+version: "3.9"
+
+# ----------------------------
+# Networks
+# ----------------------------
+networks:
+  raft-net:
+    driver: bridge
+
+# ----------------------------
+# Reusable Raft Sidecar Template
+# ----------------------------
+x-raft-sidecar: &raft-sidecar
+  build:
+    context: ./raft
+    dockerfile: Dockerfile.raft
+  networks:
+    - raft-net
+  restart: always
+  environment:
+    CLUSTER_SIZE: 5
+    BASE_NAME: raftnode
+  healthcheck:
+    test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+    interval: 5s
+    timeout: 3s
+    retries: 5
+    start_period: 3s
+
+# =====================================================================
+# SERVICES
+# =====================================================================
+
+services:
+
+  # -------------------------------------------------------------
+  # AUTH SERVICE + RAFT SIDECAR
+  # -------------------------------------------------------------
+  auth_service:
+    build:
+      context: ./services/auth_service
+    depends_on:
+      raft_auth:
+        condition: service_started
+    networks:
+      - raft-net
+    restart: always
+
+  raft_auth:
+    <<: *raft-sidecar
+    container_name: raft_auth
+    environment:
+      NODE_INDEX: 1
+      SERVICE_NAME: auth
+
+
+  # -------------------------------------------------------------
+  # GATEWAY SERVICE + RAFT SIDECAR
+  # -------------------------------------------------------------
+  gateway:
+    build:
+      context: ./services/gateway
+    depends_on:
+      raft_gateway:
+        condition: service_started
+    networks:
+      - raft-net
+    restart: always
+
+  raft_gateway:
+    <<: *raft-sidecar
+    container_name: raft_gateway
+    environment:
+      NODE_INDEX: 2
+      SERVICE_NAME: gateway
+
+
+  # -------------------------------------------------------------
+  # LOCATION SERVICE + RAFT SIDECAR
+  # -------------------------------------------------------------
+  location_service:
+    build:
+      context: ./services/location_service
+    depends_on:
+      raft_location:
+        condition: service_started
+    networks:
+      - raft-net
+    restart: always
+
+  raft_location:
+    <<: *raft-sidecar
+    container_name: raft_location
+    environment:
+      NODE_INDEX: 3
+      SERVICE_NAME: location
+
+
+  # -------------------------------------------------------------
+  # MATCHING SERVICE + RAFT SIDECAR
+  # -------------------------------------------------------------
+  matching_service:
+    build:
+      context: ./services/matching_service
+    depends_on:
+      raft_matching:
+        condition: service_started
+    networks:
+      - raft-net
+    restart: always
+
+  raft_matching:
+    <<: *raft-sidecar
+    container_name: raft_matching
+    environment:
+      NODE_INDEX: 4
+      SERVICE_NAME: matching
+
+
+  # -------------------------------------------------------------
+  # TRIP SERVICE + RAFT SIDECAR
+  # -------------------------------------------------------------
+  trip_service:
+    build:
+      context: ./services/trip_service
+    depends_on:
+      raft_trip:
+        condition: service_started
+    networks:
+      - raft-net
+    restart: always
+
+  raft_trip:
+    <<: *raft-sidecar
+    container_name: raft_trip
+    environment:
+      NODE_INDEX: 5
+      SERVICE_NAME: trip
