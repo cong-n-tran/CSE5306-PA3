@@ -3,13 +3,11 @@ import subprocess
 import time
 import re
 import shutil
+import sys
+import os
 
 # ==============================================================================
 # CONFIGURATION
-# ==============================================================================
-
-# ==============================================================================
-# CONFIGURATION (Updated for your new docker-compose.yml)
 # ==============================================================================
 
 # Mapping of Logical Node IDs to Docker Container Names
@@ -21,18 +19,52 @@ CONTAINERS = {
     5: "raft5"
 }
 
-# Network Name: Since you removed the explicit network in YAML, 
-# Docker Compose usually creates a network named "folder_default".
-# This variable is largely for reference; the script auto-detects it.
-NETWORK_NAME = "microservice-arch_raft_default" 
+# Auto-detect docker compose command
 COMPOSE_CMD = "docker-compose" if shutil.which("docker-compose") else "docker compose"
+NETWORK_NAME = "microservice-arch_raft_default" 
+
+# ==============================================================================
+# UNIVERSAL HELPER FUNCTIONS
+# ==============================================================================
 
 def run_command(cmd):
-    """Run a shell command and return stdout."""
+    """Run a shell command and return stdout, compatible with Windows/Mac/Linux."""
     if cmd.startswith("docker-compose"):
         cmd = cmd.replace("docker-compose", COMPOSE_CMD)
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    return result.stdout.strip()
+        
+    # Run command
+    try:
+        result = subprocess.run(
+            cmd, 
+            shell=True, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.PIPE, 
+            text=True
+        )
+        return result.stdout.strip()
+    except Exception as e:
+        print(f"Command failed: {cmd}\nError: {e}")
+        return ""
+
+def clean_output(output):
+    """
+    Universal cleaner. 
+    Removes single quotes (Mac/Linux artifact) and double quotes (Windows artifact).
+    """
+    if not output:
+        return ""
+    return output.strip().strip("'").strip('"')
+
+def is_container_running(container_name):
+    """
+    Cross-platform check if a container is running.
+    Uses double quotes for the format string to satisfy Windows CMD and Linux Bash.
+    """
+    # NOTE: We use double quotes around the format string for Windows compatibility
+    cmd = f'docker inspect -f "{{{{.State.Running}}}}" {container_name}'
+    output = run_command(cmd)
+    cleaned = clean_output(output).lower()
+    return cleaned == 'true'
 
 def get_container_logs(container_name):
     return run_command(f"docker logs {container_name}")
@@ -41,8 +73,8 @@ def restart_cluster():
     print("\n[Setup] Restarting Cluster...")
     run_command("docker-compose down")
     run_command("docker-compose up -d --build")
-    print("[Setup] Waiting 30s for cluster to stabilize...")
-    time.sleep(30)
+    print("[Setup] Waiting 20s for cluster to stabilize...")
+    time.sleep(20)
 
 def get_leader():
     """
@@ -53,7 +85,8 @@ def get_leader():
 
     for node_id, name in CONTAINERS.items():
         logs = get_container_logs(name)
-        # Match: "Node raftnode1 becomes LEADER (term 2)"
+        # Match: "Node raftnode1 becomes LEADER (term 2)" or "Node 1 becomes..."
+        # Adjust regex to be permissive of different log formats
         matches = re.findall(r"becomes LEADER \(term (\d+)\)", logs)
         if matches:
             last_term = int(matches[-1])
@@ -63,27 +96,35 @@ def get_leader():
     
     return current_leader
 
+# ==============================================================================
+# TEST SUITE
+# ==============================================================================
+
 class TestRaftImplementation(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         global NETWORK_NAME
-        # Auto-detect network
-        nets = run_command("docker network ls --format '{{.Name}}'").split('\n')
-        possible_names = [n for n in nets if 'raft-net' in n]
+        print(f"OS Platform: {sys.platform}")
+        print(f"Using Compose Command: {COMPOSE_CMD}")
+        
+        # Attempt to auto-detect network name
+        nets = run_command("docker network ls --format \"{{.Name}}\"").split('\n')
+        possible_names = [n for n in nets if 'raft' in n and 'default' in n] # looser match
         if possible_names:
-            NETWORK_NAME = possible_names[0]
-            print(f"Using Docker Network: {NETWORK_NAME}")
+            NETWORK_NAME = possible_names[0].strip()
+            print(f"Auto-detected Network: {NETWORK_NAME}")
+        else:
+            print(f"Warning: Using default network name: {NETWORK_NAME}")
 
     def setUp(self):
         restart_cluster()
 
     def fail_with_debug_logs(self, message):
-        """Helper to print logs when a test fails."""
         print(f"\n!!! TEST FAILURE: {message} !!!")
-        print("--- DUMPING LOGS FROM NODE 1 (raft_auth) ---")
-        print(get_container_logs("raft_auth")[-2000:]) # Last 2000 chars
-        print("--------------------------------------------")
+        print("--- DUMPING LOGS FROM NODE 1 (raft1) ---")
+        print(get_container_logs("raft1")[-2000:]) 
+        print("----------------------------------------")
         self.fail(message)
 
     def test_01_leader_dies(self):
@@ -127,8 +168,9 @@ class TestRaftImplementation(unittest.TestCase):
         run_command(f"docker stop {follower_name}")
         time.sleep(5)
 
-        is_running = run_command(f"docker inspect -f '{{{{.State.Running}}}}' {leader_name}")
-        self.assertEqual(is_running, 'true', "Leader crashed after follower died.")
+        # UNIVERSAL CHECK:
+        running = is_container_running(leader_name)
+        self.assertTrue(running, f"Leader {leader_name} crashed after follower died.")
         print(f"SUCCESS: Leader {leader_name} survived.")
 
     def test_03_leader_and_follower_die(self):
@@ -148,7 +190,6 @@ class TestRaftImplementation(unittest.TestCase):
 
         new_leader = get_leader()
         if not new_leader:
-             # Check if any node is even running
              self.fail_with_debug_logs("Cluster failed to elect leader with 3/5 nodes alive.")
         
         new_id, new_name = new_leader
@@ -168,7 +209,6 @@ class TestRaftImplementation(unittest.TestCase):
         time.sleep(15)
 
         logs = get_container_logs(target_node)
-        # Look for either leadership or receiving entries
         match = re.search(r"(RPC AppendEntries called by Node|becomes LEADER)", logs)
         
         if not match:
@@ -194,11 +234,12 @@ class TestRaftImplementation(unittest.TestCase):
             if nid == leader_id: continue
             
             logs = get_container_logs(name)
+            # Only count if they claimed leadership RECENTLY (check term logic ideally, but existence works for basic test)
             if "becomes LEADER" in logs:
-                # In a real robust test we'd check terms, but existence implies election
                 new_leader_found = True
                 break
         
+        # Cleanup
         run_command(f"docker network connect {NETWORK_NAME} {leader_name}")
         
         if not new_leader_found:
